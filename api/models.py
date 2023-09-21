@@ -1,11 +1,8 @@
-from django.utils import timezone
+import os
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from PIL import Image
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-import os
-from core import settings
 
 
 def upload_to(instance, filename):
@@ -21,54 +18,42 @@ def validate_image_extension(value):
         raise ValidationError(_("Only .jpg and .png files are allowed."))
 
 
-class Picture(models.Model):
-    title = models.CharField(max_length=100)
-    created = models.DateTimeField(default=timezone.now)
-    author = models.ForeignKey(User, on_delete=models.PROTECT, related_name='images', blank=True)
+# Thumbnail size model
+class Size(models.Model):
+    width = models.IntegerField()
+    height = models.IntegerField()
 
-    image = models.ImageField(_("Image"), upload_to=upload_to, validators=[validate_image_extension])
-    image_200 = models.ImageField(upload_to=upload_to, blank=True, null=True)
-    image_400 = models.ImageField(upload_to=upload_to, blank=True, null=True)
-    
+    def __str__(self):
+        return f'{self.width}x{self.height}'
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
 
-        if self.image:
-            pil_image = Image.open(self.image.path)
+# User's Tier model
+class Tier(models.Model):
+    name = models.CharField(max_length=100)
+    thumbnail_sizes = models.ManyToManyField(to=Size, related_name='tiers')
+    has_original_link = models.BooleanField(default=False)
+    can_generate_expiring_links = models.BooleanField(default=False)
 
-            # Create a 400px height thumbnail
-            if pil_image.height > 400:
-                width = pil_image.width * 400 // pil_image.height
-                pil_image.thumbnail((width, 400), Image.LANCZOS)
-                thumbnail_400_path = self.image.path.replace(".jpg", "_400.jpg").replace(".png", "_400.png")
-                pil_image.save(thumbnail_400_path)
-
-                # Update the reference to the 400x400 thumbnail
-                self.image_400 = os.path.relpath(thumbnail_400_path, settings.MEDIA_ROOT)
-
-           # Create a 200px height thumbnail
-            if pil_image.height > 200:
-                width = pil_image.width * 200 // pil_image.height
-                pil_image.thumbnail((width, 200), Image.LANCZOS)
-                thumbnail_200_path = self.image.path.replace(".jpg", "_200.jpg").replace(".png", "_200.png")
-                pil_image.save(thumbnail_200_path)
-
-                # Update the reference to the 200x200 thumbnail
-                self.image_200 = os.path.relpath(thumbnail_200_path, settings.MEDIA_ROOT)
+    def __str__(self):
+        return self.name
 
 
 class Profile(models.Model):
-
-    MEMBERSHIP = (
-        ('BASIC', 'Basic'),
-        ('PREMIUM', 'Premium'),
-        ('ENTERPRISE', 'Enterprise')
-    )
-
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    membership = models.CharField(max_length=10, choices=MEMBERSHIP, default='BASIC')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    tier = models.ForeignKey(Tier, on_delete=models.PROTECT, related_name='profiles')  # Use ForeignKey to Tier model
 
     def __str__(self):
-        return f'{self.user.username} {self.membership} Profile'
+        return f'{self.user.username} - {self.tier.name}'
     
+
+# Image model
+class Image(models.Model):
+    title = models.CharField(max_length=100)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(_("Image"), upload_to=upload_to, validators=[validate_image_extension])
+    created_at = models.DateTimeField(auto_now_add=True)
+    size = models.ForeignKey(Size, on_delete=models.PROTECT, related_name='images', blank=True, null=True)
+
+    def __str__(self):
+        return self.title
+

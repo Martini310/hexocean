@@ -1,36 +1,23 @@
 from rest_framework import serializers
-from .models import Picture
+from .models import Image, Tier, Size
 
 
-# class PictureSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Picture
-#         fields = ('id', 'title', 'author', 'image')
-
-
-# class PictureBasicUserSerializer(serializers.ModelSerializer):
-
-#     class Meta:
-#         model = Picture
-#         fields = ('author', 'title', 'image_200')
-
-
-# class PicturePremiumUserSerializer(serializers.ModelSerializer):
-
-#     class Meta:
-#         model = Picture
-#         fields = ('author', 'title', 'image_200', 'image_400', 'image')
-
-class PictureBasicUserSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
+class ImageSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = Picture
-        fields = ('author', 'title', 'image_200')
+        model = Image
+        fields = ('title', 'image', 'size')
 
-class PicturePremiumUserSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
+
+class TierSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = Picture
-        fields = ('author', 'title', 'image_200', 'image_400', 'image')
+        model = Tier
+        fields = ('name', 'thumbnail_sizes')
+
+
+class SizeSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Size
+        fields = ('width', 'height')
