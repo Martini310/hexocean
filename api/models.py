@@ -1,8 +1,14 @@
+from collections.abc import Iterable
 import os
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.utils.text import slugify
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.utils import timezone
 
 
 def upload_to(instance, filename):
@@ -57,3 +63,30 @@ class Image(models.Model):
     def __str__(self):
         return self.title
 
+
+class TemporaryLink(models.Model):
+    image = models.ForeignKey(Image, on_delete=models.CASCADE, related_name='links')
+    exp_time = models.IntegerField(
+        default=300,
+        validators=[
+            MaxValueValidator(30000),
+            MinValueValidator(300)
+        ])
+    exp_date = models.DateTimeField(blank=True)
+    slug = models.SlugField(unique=True, blank=True)
+
+    
+    def save(self, *args, **kwargs):
+        if not self.pk:  # Check if this is a new instance
+            self.exp_date = timezone.now() + timezone.timedelta(seconds=self.exp_time)
+            self.slug = slugify(f"{self.image.title}-{self.exp_date}")
+
+        super().save(*args, **kwargs)
+
+
+# @receiver(pre_save, sender=TemporaryLink)
+# def generate_slug_and_exp_date(sender, instance, *args, **kwargs):
+#     if not instance.slug:
+#         instance.slug = slugify(f"{instance.image.title}-{instance.exp_date}")
+    
+#     instance.exp_date = timezone.now() + timezone.timedelta(seconds=instance.exp_time)

@@ -8,7 +8,28 @@ from PIL import Image as PILImage
 from io import BytesIO
 import os
 from core.settings import MEDIA_URL, MEDIA_ROOT
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
+from .models import TemporaryLink
+from django.utils import timezone
+from django.core.exceptions import PermissionDenied
 
+
+def download_image(request, slug):
+    link = get_object_or_404(TemporaryLink, slug=slug)
+    print(timezone.now(), link.exp_date)
+    # Ensure that the link is still valid (check the expiration date)
+    if timezone.now() > link.exp_date:
+        raise PermissionDenied()
+    
+    # Get the image file associated with the link
+    image_file = link.image.image
+
+    # Serve the image as a downloadable file
+    response = FileResponse(image_file, content_type='application/octet-stream')
+    response['Content-Disposition'] = f'attachment; filename="{image_file.name}"'
+    
+    return response
 
 class SizeViewSet(viewsets.ModelViewSet):
 
