@@ -1,23 +1,59 @@
-from django.shortcuts import render
-from rest_framework import viewsets, generics, permissions, status
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
-from .serializers import SizeSerializer, TierSerializer, ImageSerializer
-from .models import Size, Tier, Image
-from PIL import Image as PILImage
-from io import BytesIO
 import os
-from core.settings import MEDIA_URL, MEDIA_ROOT
+from io import BytesIO
+from mimetypes import guess_type
+from PIL import Image as PILImage
+from rest_framework import viewsets, permissions, status
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
-from .models import TemporaryLink
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied
+from django.core.files.images import get_image_dimensions
+from django.http import JsonResponse
+from core.settings import MEDIA_URL
+from .serializers import SizeSerializer, TierSerializer, ImageSerializer, ImagePostSerializer
+from .models import Size, Tier, Image, TemporaryLink
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def generate_link(request):
+    """
+        Generate a temporary link to download an image
+    """
+    try:
+        # Check if the user is allowed to generate expiring links
+        if not request.user.profile.tier.can_generate_expiring_links:
+            raise PermissionDenied('This feature is not available in your plan')
+
+        data = request.POST
+
+        # Check if the exp_time value is in range
+        if not 300 <= int(data.get('exp_time')) <= 30000:
+             return JsonResponse({'error': 'expiration time should be between 300 and 30000'})
+        
+        # Retrieve the image and check ownership
+        image = Image.objects.get(id=data.get('image_id'))
+        if image.user != request.user:
+            raise PermissionDenied('This is not your photo')
+
+        # Create a temporary link
+        link = TemporaryLink.objects.create(image=image, exp_time=int(data.get('exp_time')))
+
+        # Return the link's slug as a JSON response
+        return JsonResponse({'slug': link.slug})
+
+    except Image.DoesNotExist:
+        return JsonResponse({'error': 'Image not found'}, status=404)
+
+    except PermissionDenied as e:
+        return JsonResponse({'error': str(e)}, status=403)
 
 
 def download_image(request, slug):
     link = get_object_or_404(TemporaryLink, slug=slug)
-    print(timezone.now(), link.exp_date)
+
     # Ensure that the link is still valid (check the expiration date)
     if timezone.now() > link.exp_date:
         raise PermissionDenied()
@@ -25,15 +61,19 @@ def download_image(request, slug):
     # Get the image file associated with the link
     image_file = link.image.image
 
-    # Serve the image as a downloadable file
-    response = FileResponse(image_file, content_type='application/octet-stream')
+    # Determine the content type based on the image's file extension
+    content_type, _ = guess_type(image_file.name)
+
+    # Serve the image as a downloadable file with the correct content type
+    response = FileResponse(image_file, content_type=content_type)
     response['Content-Disposition'] = f'attachment; filename="{image_file.name}"'
     
     return response
 
+
 class SizeViewSet(viewsets.ModelViewSet):
 
-    queryset = Size.objects.all()
+    queryset = Size.objects.filter(thumbnail_size=True)
     serializer_class = SizeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -47,8 +87,13 @@ class TierViewSet(viewsets.ModelViewSet):
 
 class ImageViewSet(viewsets.ModelViewSet):
     
-    serializer_class = ImageSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return ImagePostSerializer
+        return ImageSerializer
+    
 
     def get_queryset(self):
         return Image.objects.filter(user=self.request.user)
@@ -66,23 +111,48 @@ class ImageViewSet(viewsets.ModelViewSet):
         # Save the original image
         image = serializer.validated_data['image']
         image_instance = self.save_original_image(image, serializer.validated_data['title'])
+        
+        # Get the image dimensions
+        width, height = get_image_dimensions(image)
 
+        # Create and save a Size instance if not exist
+        if Size.objects.filter(width=width, height=height):
+            size_instance = Size.objects.get(width=width, height=height)
+        else:
+            size_instance = Size.objects.create(width=width, height=height)
+
+        # Associate the Size instance with the image
+        image_instance.size = size_instance
+        image_instance.save()
+        
         # Create and save thumbnails
-        self.create_and_save_thumbnails(image, thumbnail_sizes)
+        thumbnail_instances = self.create_and_save_thumbnails(image, thumbnail_sizes)
 
         # Create a Response dictionary with links to all resolutions
-        response_data = serializer.data
-        # Add path to original size
-        response_data['image'] = image_instance.image.url
-        # Add paths to all thumbnails
-        for size in thumbnail_sizes:
-            response_data[f'image_{size}'] = f"{MEDIA_URL}thumbnail_{size.width}x{size.height}_{image_instance.image.name}"
+        response_data = self.create_response(user_tier, serializer.data, image_instance, thumbnail_instances, width, height)
 
         headers = self.get_success_headers(serializer.data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
+    def create_response(self, user_tier, serializer_data, image_instance, thumbnail_instances, width, height):
+        response_data = serializer_data
+
+        if user_tier.has_original_link:
+            # Add path to original size
+            response_data['image'] = image_instance.image.url
+            response_data['size'] = {'width': width, 'height': height}
+        else:
+            del response_data['image']
+            del response_data['size']
+
+        # Add paths to all created thumbnails
+        for instance in thumbnail_instances:
+            response_data[f'image_{instance.size}'] = f"{MEDIA_URL}{instance.image.name}"
+
+        return response_data
 
     def create_and_save_thumbnails(self, image, thumbnail_sizes):
+        thumbnail_instances = []
         for size in thumbnail_sizes:
             thumbnail = self.create_thumbnail(image, size)
             thumbnail_name = f"thumbnail_{size.width}x{size.height}_{image.name}"
@@ -95,13 +165,15 @@ class ImageViewSet(viewsets.ModelViewSet):
             )
             thumbnail_instance.image.save(thumbnail_name, tmp_thumbnail, save=False)
             thumbnail_instance.save()
-
+            thumbnail_instances.append(thumbnail_instance)
+        return thumbnail_instances
 
     def save_original_image(self, image, title):
         image_instance = Image(
             title=title,
             user=self.request.user,
         )
+
         image_instance.image.save(image.name, image, save=False)
         image_instance.save()
         return image_instance
@@ -114,4 +186,5 @@ class ImageViewSet(viewsets.ModelViewSet):
         except Exception as e:
             # Handle exceptions here, e.g., log the error or return a default image.
             print(f'-----{e}------')
+
 

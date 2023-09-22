@@ -28,6 +28,7 @@ def validate_image_extension(value):
 class Size(models.Model):
     width = models.IntegerField()
     height = models.IntegerField()
+    thumbnail_size = models.BooleanField(default=False)
 
     def __str__(self):
         return f'{self.width}x{self.height}'
