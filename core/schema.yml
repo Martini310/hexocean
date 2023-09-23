@@ -1,0 +1,222 @@
+openapi: 3.0.3
+info:
+  title: Hexocean
+  version: 1.0.0
+  description: Recruitment task
+paths:
+  /api/generate-link/:
+    post:
+      operationId: api_generate_link_create
+      description: Generate a temporary link to download an image
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/images/:
+    get:
+      operationId: api_images_list
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Image'
+          description: ''
+    post:
+      operationId: api_images_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImagePost'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImagePost'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImagePost'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImagePost'
+          description: ''
+  /api/images/{id}/:
+    get:
+      operationId: api_images_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+          description: ''
+    put:
+      operationId: api_images_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Image'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Image'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Image'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+          description: ''
+    patch:
+      operationId: api_images_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedImage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedImage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedImage'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+          description: ''
+    delete:
+      operationId: api_images_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      responses:
+        '204':
+          description: No response body
+components:
+  schemas:
+    Image:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 100
+        image:
+          type: string
+          format: uri
+        size:
+          $ref: '#/components/schemas/Size'
+      required:
+      - image
+      - size
+      - title
+    ImagePost:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 100
+        image:
+          type: string
+          format: uri
+        size:
+          type: integer
+          nullable: true
+      required:
+      - image
+      - title
+    PatchedImage:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 100
+        image:
+          type: string
+          format: uri
+        size:
+          $ref: '#/components/schemas/Size'
+    Size:
+      type: object
+      properties:
+        width:
+          type: integer
+        height:
+          type: integer
+      required:
+      - height
+      - width
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

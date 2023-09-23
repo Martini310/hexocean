@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-_4w%&$c*!-7ns*x6g&oz*a&5v(w@8q7lbku1gxq&4fnfz*$-64
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'api'
+    'api',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -134,7 +135,15 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'images')
 MEDIA_URL = '/images/'
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Hexocean',
+    'DESCRIPTION': 'Recruitment task',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}

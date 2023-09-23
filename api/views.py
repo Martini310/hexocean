@@ -4,11 +4,12 @@ from mimetypes import guess_type
 from PIL import Image as PILImage
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.decorators import api_view, permission_classes
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.core.exceptions import PermissionDenied
+# from django.core.exceptions import PermissionDenied
 from django.core.files.images import get_image_dimensions
 from django.http import JsonResponse
 from core.settings import MEDIA_URL
@@ -41,8 +42,8 @@ def generate_link(request):
         # Create a temporary link
         link = TemporaryLink.objects.create(image=image, exp_time=int(data.get('exp_time')))
 
-        # Return the link's slug as a JSON response
-        return JsonResponse({'slug': link.slug})
+        # Return the link as a JSON response
+        return JsonResponse({'url': link.url, 'expiration': link.exp_date})
 
     except Image.DoesNotExist:
         return JsonResponse({'error': 'Image not found'}, status=404)
@@ -51,12 +52,13 @@ def generate_link(request):
         return JsonResponse({'error': str(e)}, status=403)
 
 
+@api_view(['GET'])
 def download_image(request, slug):
     link = get_object_or_404(TemporaryLink, slug=slug)
 
     # Ensure that the link is still valid (check the expiration date)
     if timezone.now() > link.exp_date:
-        raise PermissionDenied()
+        return JsonResponse({'error': 'Link expired'}, status=404)
     
     # Get the image file associated with the link
     image_file = link.image.image
@@ -75,14 +77,14 @@ class SizeViewSet(viewsets.ModelViewSet):
 
     queryset = Size.objects.filter(thumbnail_size=True)
     serializer_class = SizeSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAdminUser]
 
 
 class TierViewSet(viewsets.ModelViewSet):
 
     queryset = Tier.objects.all()
     serializer_class = TierSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAdminUser]
 
 
 class ImageViewSet(viewsets.ModelViewSet):
@@ -97,6 +99,7 @@ class ImageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Image.objects.filter(user=self.request.user)
+
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -134,6 +137,7 @@ class ImageViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
+
     def create_response(self, user_tier, serializer_data, image_instance, thumbnail_instances, width, height):
         response_data = serializer_data
 
@@ -150,6 +154,7 @@ class ImageViewSet(viewsets.ModelViewSet):
             response_data[f'image_{instance.size}'] = f"{MEDIA_URL}{instance.image.name}"
 
         return response_data
+
 
     def create_and_save_thumbnails(self, image, thumbnail_sizes):
         thumbnail_instances = []
@@ -168,6 +173,7 @@ class ImageViewSet(viewsets.ModelViewSet):
             thumbnail_instances.append(thumbnail_instance)
         return thumbnail_instances
 
+
     def save_original_image(self, image, title):
         image_instance = Image(
             title=title,
@@ -177,6 +183,7 @@ class ImageViewSet(viewsets.ModelViewSet):
         image_instance.image.save(image.name, image, save=False)
         image_instance.save()
         return image_instance
+
 
     def create_thumbnail(self, image_file, size):
         try:
@@ -188,3 +195,11 @@ class ImageViewSet(viewsets.ModelViewSet):
             print(f'-----{e}------')
 
 
+    def update(self, request, pk=None):
+        raise MethodNotAllowed('PUT', detail='Method "PUT" not allowed without lookup')
+
+    def partial_update(self, request, pk=None):
+        raise MethodNotAllowed(method='PATCH', detail='Method "PATCH" not allowed without lookup')
+    
+    def destroy(self, request, pk=None):
+        raise MethodNotAllowed(method='DELETE', detail='Method "DELETE" not allowed without lookup')

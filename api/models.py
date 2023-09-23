@@ -9,6 +9,7 @@ from django.db.models.signals import pre_save
 from django.dispatch import receiver
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.utils import timezone
+from django.urls import reverse
 
 
 def upload_to(instance, filename):
@@ -75,6 +76,7 @@ class TemporaryLink(models.Model):
         ])
     exp_date = models.DateTimeField(blank=True)
     slug = models.SlugField(unique=True, blank=True)
+    url = models.URLField(editable=False)  # The URL field is not editable
 
     
     def save(self, *args, **kwargs):
@@ -82,12 +84,9 @@ class TemporaryLink(models.Model):
             self.exp_date = timezone.now() + timezone.timedelta(seconds=self.exp_time)
             self.slug = slugify(f"{self.image.title}-{self.exp_date}")
 
+            # Create the full URL path using reverse and the URL name for the download_image view
+            self.url = reverse('api:download_image', args=[str(self.slug)])
+
+
         super().save(*args, **kwargs)
 
-
-# @receiver(pre_save, sender=TemporaryLink)
-# def generate_slug_and_exp_date(sender, instance, *args, **kwargs):
-#     if not instance.slug:
-#         instance.slug = slugify(f"{instance.image.title}-{instance.exp_date}")
-    
-#     instance.exp_date = timezone.now() + timezone.timedelta(seconds=instance.exp_time)
