@@ -188,7 +188,8 @@ class ImageViewSet(viewsets.ModelViewSet):
     def create_thumbnail(self, image_file, size):
         try:
             img = PILImage.open(image_file)
-            img.thumbnail((size.width, size.height), PILImage.LANCZOS)
+            # Create thumbnail with set height and proportional width
+            img.thumbnail((img.width * size.height // size.width, size.height), PILImage.LANCZOS)
             return img
         except Exception as e:
             # Handle exceptions here, e.g., log the error or return a default image.
@@ -196,10 +197,10 @@ class ImageViewSet(viewsets.ModelViewSet):
 
 
     def update(self, request, pk=None):
-        raise MethodNotAllowed('PUT', detail='Method "PUT" not allowed without lookup')
+        raise MethodNotAllowed('PUT', detail='Method "PUT" not allowed')
 
     def partial_update(self, request, pk=None):
-        raise MethodNotAllowed(method='PATCH', detail='Method "PATCH" not allowed without lookup')
+        raise MethodNotAllowed(method='PATCH', detail='Method "PATCH" not allowed')
     
     def destroy(self, request, pk=None):
-        raise MethodNotAllowed(method='DELETE', detail='Method "DELETE" not allowed without lookup')
+        raise MethodNotAllowed(method='DELETE', detail='Method "DELETE" not allowed')
