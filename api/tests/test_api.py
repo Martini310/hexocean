@@ -33,7 +33,7 @@ def test_create_image_basic_user(create_basic_user):
     print(response.content)
     content = json.loads(response.content)
     assert response.status_code == status.HTTP_201_CREATED
-    assert Size.objects.count() == 2 # Original and thumbnail
+    assert Size.objects.count() == 3 # Original and 2 thumbnails (200px and 400px)
     assert Image.objects.count() == 2 # Original and thumbnail
     assert content['title'] == "Test image"
     assert ('/images/thumbnail_200x200_test' in content['image_200x200']) == True
@@ -60,8 +60,8 @@ def test_create_image_premium_user(create_premium_user):
     print(response.content)
     content = json.loads(response.content)
     assert response.status_code == status.HTTP_201_CREATED
-    assert Size.objects.count() == 3 # Original and thumbnail
-    assert Image.objects.count() == 3 # Original and thumbnail
+    assert Size.objects.count() == 3 # Original and 2 thumbnails (200px and 400px)
+    assert Image.objects.count() == 3 # Original and 2 thumbnails (200px and 400px)
     assert content['title'] == "Test image"
     assert ('/images/thumbnail_200x200_test' in content['image_200x200']) == True
     assert ('/images/thumbnail_400x400_test' in content['image_400x400']) == True

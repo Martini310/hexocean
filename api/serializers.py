@@ -21,7 +21,7 @@ class ImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Image
-        fields = ('title', 'image', 'size')
+        fields = ('id', 'title', 'image', 'size')
         
 
 class ImagePostSerializer(serializers.ModelSerializer):

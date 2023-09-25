@@ -2,14 +2,13 @@ import os
 from io import BytesIO
 from mimetypes import guess_type
 from PIL import Image as PILImage
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, generics
 from rest_framework.response import Response
-from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import api_view, permission_classes
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-# from django.core.exceptions import PermissionDenied
 from django.core.files.images import get_image_dimensions
 from django.http import JsonResponse
 from core.settings import MEDIA_URL
@@ -87,7 +86,7 @@ class TierViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
 
 
-class ImageViewSet(viewsets.ModelViewSet):
+class ImageView(generics.ListCreateAPIView):
     
     permission_classes = [permissions.IsAuthenticated]
 
@@ -111,41 +110,54 @@ class ImageViewSet(viewsets.ModelViewSet):
         # Calculate thumbnail sizes based on the user's tier
         thumbnail_sizes = user_tier.thumbnail_sizes.all() if user_tier else []
 
-        # Save the original image
-        image = serializer.validated_data['image']
-        image_instance = self.save_original_image(image, serializer.validated_data['title'])
-        
+    
         # Get the image dimensions
+        image = serializer.validated_data['image']
         width, height = get_image_dimensions(image)
 
-        # Create and save a Size instance if not exist
+        # Get Size instance with image sizes if exists, else create new
         if Size.objects.filter(width=width, height=height):
             size_instance = Size.objects.get(width=width, height=height)
         else:
             size_instance = Size.objects.create(width=width, height=height)
 
-        # Associate the Size instance with the image
-        image_instance.size = size_instance
-        image_instance.save()
+        # Create Image instance from original image
+        image_instance = self.save_original_image(image, serializer.validated_data['title'], size_instance)
         
         # Create and save thumbnails
         thumbnail_instances = self.create_and_save_thumbnails(image, thumbnail_sizes)
 
         # Create a Response dictionary with links to all resolutions
-        response_data = self.create_response(user_tier, serializer.data, image_instance, thumbnail_instances, width, height)
+        response_data = self.create_response(serializer.data, image_instance, thumbnail_instances, width, height)
 
         headers = self.get_success_headers(serializer.data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
 
-    def create_response(self, user_tier, serializer_data, image_instance, thumbnail_instances, width, height):
+    def create_response(self, serializer_data, image_instance, thumbnail_instances, width, height):
+        """
+        Return response to be send to the user
+
+            Parameters:
+                    serializer_data (dict): Serialized request data from User
+                    image_instance : image file
+                    thumbnail_instances (list): List of Image instances
+                    width (int): Original image width
+                    height (int): Original image height
+
+            Returns:
+                    response_data (dict): Response to the User
+        """
         response_data = serializer_data
 
-        if user_tier.has_original_link:
+        # If user's tier allow to have link to original image
+        if self.request.user.profile.tier.has_original_link:
             # Add path to original size
             response_data['image'] = image_instance.image.url
+            # Add size of original image
             response_data['size'] = {'width': width, 'height': height}
         else:
+        # Delete keys if not
             del response_data['image']
             del response_data['size']
 
@@ -157,50 +169,93 @@ class ImageViewSet(viewsets.ModelViewSet):
 
 
     def create_and_save_thumbnails(self, image, thumbnail_sizes):
+        """
+        Return list of created Image instances 
+
+            Parameters:
+                    image: image file
+                    thumbnails_sizes(iter): Queryset of Size objects in Tier's thumbnails_sizes field
+
+            Returns:
+                    thumbnail_instances (list): List of Image instances
+        """
+
         thumbnail_instances = []
+
         for size in thumbnail_sizes:
             thumbnail = self.create_thumbnail(image, size)
+            # Create a name with pattern - 'thumbnail_<width>x<height>_<image_name>'
             thumbnail_name = f"thumbnail_{size.width}x{size.height}_{image.name}"
+
             tmp_thumbnail = BytesIO()
             thumbnail.save(tmp_thumbnail, format='JPEG' if image.name.lower().endswith('.jpg') else 'PNG')
+            
+            # Create Image instance
             thumbnail_instance = Image(
-                title=thumbnail_name,
-                user=self.request.user,
-                size=size,
+                                    title=thumbnail_name,
+                                    user=self.request.user,
+                                    size=size,
             )
+
+            # Add image file to instance
             thumbnail_instance.image.save(thumbnail_name, tmp_thumbnail, save=False)
+
+            # Save instance
             thumbnail_instance.save()
+
+            # Add instance to returned list
             thumbnail_instances.append(thumbnail_instance)
+
         return thumbnail_instances
 
 
-    def save_original_image(self, image, title):
-        image_instance = Image(
-            title=title,
-            user=self.request.user,
-        )
+    def save_original_image(self, image, title, size):
+        """
+        Return Image instance of original image
 
+            Parameters:
+                    image: image file
+                    title (str): Title of image
+                    size (obj): Size instance
+
+            Returns:
+                    image_instance (obj): Image instance
+        """
+        # Create Image instance
+        image_instance = Image(title=title,
+                               user=self.request.user,
+                               size=size
+                              )
+        # Add image file to instance
         image_instance.image.save(image.name, image, save=False)
-        image_instance.save()
+
+        # Save instance in db
+        if self.request.user.profile.tier.has_original_link:
+            image_instance.save()
+
         return image_instance
 
 
     def create_thumbnail(self, image_file, size):
+        """
+        Return resized image
+
+            Parameters:
+                    image: image file
+                    size (obj): Size object
+
+            Returns:
+                    img (obj): Resized image as PIL.Image object
+        """
         try:
             img = PILImage.open(image_file)
+
             # Create thumbnail with set height and proportional width
             img.thumbnail((img.width * size.height // size.width, size.height), PILImage.LANCZOS)
+
             return img
+        
         except Exception as e:
-            # Handle exceptions here, e.g., log the error or return a default image.
             print(f'-----{e}------')
+            return e
 
-
-    def update(self, request, pk=None):
-        raise MethodNotAllowed('PUT', detail='Method "PUT" not allowed')
-
-    def partial_update(self, request, pk=None):
-        raise MethodNotAllowed(method='PATCH', detail='Method "PATCH" not allowed')
-    
-    def destroy(self, request, pk=None):
-        raise MethodNotAllowed(method='DELETE', detail='Method "DELETE" not allowed')

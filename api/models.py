@@ -77,7 +77,6 @@ class TemporaryLink(models.Model):
     exp_date = models.DateTimeField(blank=True)
     slug = models.SlugField(unique=True, blank=True)
     url = models.URLField(editable=False)  # The URL field is not editable
-
     
     def save(self, *args, **kwargs):
         if not self.pk:  # Check if this is a new instance
@@ -90,3 +89,5 @@ class TemporaryLink(models.Model):
 
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        return f'{self.image.title} - exp: {self.exp_date}'

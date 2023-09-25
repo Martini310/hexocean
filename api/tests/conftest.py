@@ -11,10 +11,8 @@ def create_basic_user():
     }
     user = User.objects.create(**payload)
 
-    size = Size.objects.create(width=200, height=200, thumbnail_size=True)
-    tier = Tier.objects.create(name='Basic')
-    tier.thumbnail_sizes.set(Size.objects.all())
-    profile = Profile.objects.create(user=user, tier=tier)
+    basic = Tier.objects.filter(name='Basic').get()
+    profile = Profile.objects.create(user=user, tier=basic)
 
     return user
 
@@ -27,11 +25,7 @@ def create_premium_user():
     }
     user = User.objects.create(**payload)
 
-    Size.objects.create(width=200, height=200, thumbnail_size=True)
-    Size.objects.create(width=400, height=400, thumbnail_size=True)
-
-    tier = Tier.objects.create(name='Premium', has_original_link=True)
-    tier.thumbnail_sizes.set(Size.objects.filter(thumbnail_size=True))
-    profile = Profile.objects.create(user=user, tier=tier)
+    premium = Tier.objects.filter(name='Premium').get()
+    profile = Profile.objects.create(user=user, tier=premium)
 
     return user
