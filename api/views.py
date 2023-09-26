@@ -109,17 +109,13 @@ class ImageView(generics.ListCreateAPIView):
 
         # Calculate thumbnail sizes based on the user's tier
         thumbnail_sizes = user_tier.thumbnail_sizes.all() if user_tier else []
-
     
         # Get the image dimensions
         image = serializer.validated_data['image']
         width, height = get_image_dimensions(image)
 
         # Get Size instance with image sizes if exists, else create new
-        if Size.objects.filter(width=width, height=height):
-            size_instance = Size.objects.get(width=width, height=height)
-        else:
-            size_instance = Size.objects.create(width=width, height=height)
+        size_instance, _ = Size.objects.get_or_create(width=width, height=height)
 
         # Create Image instance from original image
         image_instance = self.save_original_image(image, serializer.validated_data['title'], size_instance)

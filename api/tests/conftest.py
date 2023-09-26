@@ -65,3 +65,23 @@ def create_image(create_enterprise_user):
                                  user=user)
 
     return image
+
+
+@pytest.fixture
+def create_second_image(create_premium_user):
+
+    image_data = BytesIO()
+    image = PILImage.new('RGB', (200, 200), 'black')
+    image.save(image_data, format='png')
+    image_data.seek(0)
+
+    size = Size.objects.first()
+    user = create_premium_user
+
+    image = Image.objects.create(title='Test image 2',
+                                 image=SimpleUploadedFile("test2.png", image_data.read(), content_type='image/png'),
+                                 size=size,
+                                 user=user)
+
+    return image
+

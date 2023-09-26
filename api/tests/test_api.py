@@ -190,6 +190,7 @@ def test_enterprise_user_can_generate_link(create_image):
 
 @pytest.mark.django_db
 def test_enterprise_user_cannot_generate_link_no_image(create_image):
+
     user = User.objects.get(username='enterprise_user')
 
     client.force_login(user)
@@ -206,3 +207,52 @@ def test_enterprise_user_cannot_generate_link_no_image(create_image):
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert content['error'] == 'Image not found'
+
+
+@pytest.mark.django_db
+def test_enterprise_user_cannot_generate_link_others_image(create_image, create_second_image):
+    
+    second_image = create_second_image
+
+    user = User.objects.get(username='enterprise_user')
+
+    client.force_login(user)
+    url = reverse('api:generate_link')
+
+    payload = {
+        'image_id': second_image.id,
+        'exp_time': 300
+    }
+
+    response = client.post(url, payload)
+    print(response.content)
+    content = json.loads(response.content)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert content['error'] == 'This is not your photo'
+
+
+@pytest.mark.django_db
+def test_enterprise_user_cannot_create_image_wrong_format(create_enterprise_user):
+    user = User.objects.get(username='enterprise_user')
+    
+    image_data = BytesIO()
+    image = PILImage.new('RGB', (1000, 1000), 'black')
+    image.save(image_data, format='gif')
+    image_data.seek(0)
+        
+    client.force_login(user)
+
+    url = reverse('api:images')
+
+    payload = {
+        'title': 'Test gif image',
+        'image': SimpleUploadedFile("test.gif", image_data.read(), content_type='image/gif')
+    }
+
+    response = client.post(url, payload, format='multipart')
+    print(response.content)
+    content = json.loads(response.content)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert content['image'][0] == "Only .jpg and .png files are allowed."
