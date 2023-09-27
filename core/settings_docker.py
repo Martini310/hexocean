@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-_4w%&$c*!-7ns*x6g&oz*a&5v(w@8q7lbku1gxq&4fnfz*$-64
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = True
-DEBUG = 'RENDER' not in os.environ
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
@@ -80,7 +80,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-IN_DOCKER = os.environ.get('DOCKER', 0)
+
 if not DEBUG:
     DATABASES = {
     'default': dj_database_url.config(
@@ -90,24 +90,12 @@ if not DEBUG:
         )
     }
 else:
-    if IN_DOCKER:
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": "postgres",
-                "USER": "postgres",
-                "PASSWORD": "postgres",
-                "HOST": "db",  # set in docker-compose.yml
-                "PORT": 5432,  # default postgres port
-            }
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
-    else:    
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
+    }
 
 
 # Password validation

@@ -15,13 +15,19 @@ from core.settings import MEDIA_URL
 from .serializers import SizeSerializer, TierSerializer, ImageSerializer, ImagePostSerializer
 from .models import Size, Tier, Image, TemporaryLink
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_view
 
 
+@extend_schema_view()
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def generate_link(request):
     """
         Generate a temporary link to download an image
+
+        @params
+            image_id: <image_id>
+            exp_time: <time in seconds until link expire>
     """
     try:
         # Check if the user is allowed to generate expiring links
@@ -29,7 +35,7 @@ def generate_link(request):
             raise PermissionDenied('This feature is not available in your plan')
 
         data = request.POST
-
+        print(request)
         # Check if the exp_time value is in range
         if not 300 <= int(data.get('exp_time')) <= 30000:
              return JsonResponse({'error': 'expiration time should be between 300 and 30000'})
@@ -80,7 +86,7 @@ def serve_media(request, filename):
     # Build the absolute path to the requested file
     file_path = os.path.join(media_root, filename)
     file_ext = filename.split('.')[-1]
-
+    
     if os.path.exists(file_path):
         with open(file_path, 'rb') as file:
             response = HttpResponse(file.read(), content_type=f'image/{file_ext}')
@@ -167,7 +173,7 @@ class ImageView(generics.ListCreateAPIView):
         # If user's tier allow to have link to original image
         if self.request.user.profile.tier.has_original_link:
             # Add path to original size
-            response_data['image'] = image_instance.image.url
+            response_data['image'] = f"{self.request.get_host()}{image_instance.image.url}"
             # Add size of original image
             response_data['size'] = {'width': width, 'height': height}
         else:
@@ -177,7 +183,7 @@ class ImageView(generics.ListCreateAPIView):
 
         # Add paths to all created thumbnails
         for instance in thumbnail_instances:
-            response_data[f'image_{instance.size}'] = f"{MEDIA_URL}{instance.image.name}"
+            response_data[f'image_{instance.size}'] = f"{self.request.get_host()}{instance.image.url}"
 
         return response_data
 

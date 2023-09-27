@@ -81,7 +81,7 @@ class TemporaryLink(models.Model):
     def save(self, *args, **kwargs):
         if not self.pk:  # Check if this is a new instance
             self.exp_date = timezone.now() + timezone.timedelta(seconds=self.exp_time)
-            self.slug = slugify(f"{self.image.title}-{self.exp_date}")
+            self.slug = slugify(f"{self.image.title}-{self.exp_date.date()}{self.exp_date.hour}{self.exp_date.minute}")
 
             # Create the full URL path using reverse and the URL name for the download_image view
             self.url = reverse('api:download_image', args=[str(self.slug)])
@@ -90,4 +90,4 @@ class TemporaryLink(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f'{self.image.title} - exp: {self.exp_date}'
+        return f'{self.image.title} - exp: {self.exp_date.date()}'
