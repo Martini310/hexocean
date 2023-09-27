@@ -10,10 +10,11 @@ from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.files.images import get_image_dimensions
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from core.settings import MEDIA_URL
 from .serializers import SizeSerializer, TierSerializer, ImageSerializer, ImagePostSerializer
 from .models import Size, Tier, Image, TemporaryLink
+from django.conf import settings
 
 
 @api_view(['POST'])
@@ -70,6 +71,23 @@ def download_image(request, slug):
     response['Content-Disposition'] = f'attachment; filename="{image_file.name}"'
     
     return response
+
+
+def serve_media(request, filename):
+    # Define the absolute path to the media directory
+    media_root = settings.MEDIA_ROOT
+
+    # Build the absolute path to the requested file
+    file_path = os.path.join(media_root, filename)
+    file_ext = filename.split('.')[-1]
+
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as file:
+            response = HttpResponse(file.read(), content_type=f'image/{file_ext}')
+            return response
+
+    # Return a 404 response if the file doesn't exist
+    return HttpResponse("File not found", status=404)
 
 
 class SizeViewSet(viewsets.ModelViewSet):

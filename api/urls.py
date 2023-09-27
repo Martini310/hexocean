@@ -3,7 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from .views import ImageView, download_image, generate_link #, TierViewSet, SizeViewSet
+from .views import ImageView, download_image, generate_link, serve_media #, TierViewSet, SizeViewSet
 
 
 app_name = 'api'
@@ -18,5 +18,6 @@ urlpatterns = [
     # path('', include(router.urls)),
     path('download/<slug:slug>/', download_image, name='download_image'),
     path('generate-link/', generate_link, name='generate_link'),
-    path('images/', ImageView.as_view(), name='images')
+    path('images/', ImageView.as_view(), name='images'),
+    path('media/<str:filename>/', serve_media, name='serve_media'),
 ]
