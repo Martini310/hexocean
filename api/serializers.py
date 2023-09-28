@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Image, Tier, Size
+from .models import Image, Tier, Size, TemporaryLink
 
 
 class TierSerializer(serializers.ModelSerializer):
@@ -29,3 +29,11 @@ class ImagePostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Image
         fields = ('title', 'image', 'size')
+
+
+class TemporaryLinkSerializer(serializers.ModelSerializer):
+    image = serializers.CharField(source='image.id')
+
+    class Meta:
+        model = TemporaryLink
+        fields = ('image', 'exp_time')

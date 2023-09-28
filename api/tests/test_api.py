@@ -136,7 +136,7 @@ def test_premium_user_cannot_generate_link(create_premium_user):
     url = reverse('api:generate_link')
 
     payload = {
-        'image_id': 1,
+        'image': 1,
         'exp_time': 300
     }
 
@@ -156,7 +156,7 @@ def test_enterprise_user_cannot_generate_link_wrong_time(create_enterprise_user)
     url = reverse('api:generate_link')
 
     payload = {
-        'image_id': 1,
+        'image': 1,
         'exp_time': 200
     }
 
@@ -164,8 +164,8 @@ def test_enterprise_user_cannot_generate_link_wrong_time(create_enterprise_user)
     print(response.content)
     content = json.loads(response.content)
 
-    assert response.status_code == status.HTTP_200_OK
-    assert content['error'] == 'expiration time should be between 300 and 30000'
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert content['exp_time'] == ["Ensure this value is greater than or equal to 300."]
 
 
 @pytest.mark.django_db
@@ -176,7 +176,7 @@ def test_enterprise_user_can_generate_link(create_image):
     url = reverse('api:generate_link')
 
     payload = {
-        'image_id': 1,
+        'image': 1,
         'exp_time': 300
     }
 
@@ -184,7 +184,7 @@ def test_enterprise_user_can_generate_link(create_image):
     print(response.content)
     content = json.loads(response.content)
     link = TemporaryLink.objects.first()
-    assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_201_CREATED
     assert content['url'] == link.url
 
 
@@ -197,7 +197,7 @@ def test_enterprise_user_cannot_generate_link_no_image(create_image):
     url = reverse('api:generate_link')
 
     payload = {
-        'image_id': 2,
+        'image': 2,
         'exp_time': 300
     }
 
@@ -220,7 +220,7 @@ def test_enterprise_user_cannot_generate_link_others_image(create_image, create_
     url = reverse('api:generate_link')
 
     payload = {
-        'image_id': second_image.id,
+        'image': second_image.id,
         'exp_time': 300
     }
 

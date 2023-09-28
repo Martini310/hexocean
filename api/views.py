@@ -12,50 +12,83 @@ from django.utils import timezone
 from django.core.files.images import get_image_dimensions
 from django.http import JsonResponse, HttpResponse
 from core.settings import MEDIA_URL
-from .serializers import SizeSerializer, TierSerializer, ImageSerializer, ImagePostSerializer
+from .serializers import SizeSerializer, TierSerializer, ImageSerializer, ImagePostSerializer, TemporaryLinkSerializer
 from .models import Size, Tier, Image, TemporaryLink
 from django.conf import settings
-from drf_spectacular.utils import extend_schema_view
 
 
-@extend_schema_view()
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def generate_link(request):
-    """
-        Generate a temporary link to download an image
+class GenerateLink(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TemporaryLinkSerializer
 
-        @params
-            image_id: <image_id>
-            exp_time: <time in seconds until link expire>
-    """
-    try:
-        # Check if the user is allowed to generate expiring links
-        if not request.user.profile.tier.can_generate_expiring_links:
-            raise PermissionDenied('This feature is not available in your plan')
+    def create(self, request):
+        try:
+            # Check if the user is allowed to generate expiring links
+            if not self.request.user.profile.tier.can_generate_expiring_links:
+                return Response({'error': 'This feature is not available in your plan'}, status=status.HTTP_403_FORBIDDEN)
 
-        data = request.POST
-        print(request)
-        # Check if the exp_time value is in range
-        if not 300 <= int(data.get('exp_time')) <= 30000:
-             return JsonResponse({'error': 'expiration time should be between 300 and 30000'})
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            data = serializer.validated_data
+            print(data)
+            # Check if the exp_time value is in range
+            if not 300 <= int(data.get('exp_time')) <= 30000:
+                return Response({'error': 'expiration time should be between 300 and 30000'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Retrieve the image and check ownership
+            image = Image.objects.get(id=data.get('image').get('id'))
+            if image.user != self.request.user:
+                return Response({'error': 'This is not your photo'}, status=status.HTTP_403_FORBIDDEN)
+
+            # Create a temporary link
+            link = TemporaryLink.objects.create(image=image, exp_time=int(data.get('exp_time')))
+
+            # Return the link as a JSON response
+            return Response({'url': link.url, 'expiration': link.exp_date}, status=status.HTTP_201_CREATED)
+
+        except Image.DoesNotExist:
+            return Response({'error': 'Image not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        except PermissionDenied as e:
+            return JsonResponse({'error': str(e)}, status=403)
+
+# @api_view(['POST'])
+# @permission_classes([permissions.IsAuthenticated])
+# def generate_link(request):
+#     """
+#         Generate a temporary link to download an image
+
+#         @params
+#             image_id: <image_id>
+#             exp_time: <time in seconds until link expire>
+#     """
+#     try:
+#         # Check if the user is allowed to generate expiring links
+#         if not request.user.profile.tier.can_generate_expiring_links:
+#             raise PermissionDenied('This feature is not available in your plan')
+
+#         data = request.POST
+#         print(request)
+#         # Check if the exp_time value is in range
+#         if not 300 <= int(data.get('exp_time')) <= 30000:
+#              return JsonResponse({'error': 'expiration time should be between 300 and 30000'})
         
-        # Retrieve the image and check ownership
-        image = Image.objects.get(id=data.get('image_id'))
-        if image.user != request.user:
-            raise PermissionDenied('This is not your photo')
+#         # Retrieve the image and check ownership
+#         image = Image.objects.get(id=data.get('image_id'))
+#         if image.user != request.user:
+#             raise PermissionDenied('This is not your photo')
 
-        # Create a temporary link
-        link = TemporaryLink.objects.create(image=image, exp_time=int(data.get('exp_time')))
+#         # Create a temporary link
+#         link = TemporaryLink.objects.create(image=image, exp_time=int(data.get('exp_time')))
 
-        # Return the link as a JSON response
-        return JsonResponse({'url': link.url, 'expiration': link.exp_date})
+#         # Return the link as a JSON response
+#         return JsonResponse({'url': link.url, 'expiration': link.exp_date})
 
-    except Image.DoesNotExist:
-        return JsonResponse({'error': 'Image not found'}, status=404)
+#     except Image.DoesNotExist:
+#         return JsonResponse({'error': 'Image not found'}, status=404)
 
-    except PermissionDenied as e:
-        return JsonResponse({'error': str(e)}, status=403)
+#     except PermissionDenied as e:
+#         return JsonResponse({'error': str(e)}, status=403)
 
 
 @api_view(['GET'])
